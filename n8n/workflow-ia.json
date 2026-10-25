@@ -1,0 +1,131 @@
+{
+  "name": "Assistente de Investimentos - RPA + N8N + IA",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "clientes",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "b2c3d4e5-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "clientes-investimentos-ia"
+    },
+    {
+      "parameters": {
+        "url": "https://digitalinnovationone.github.io/dio-lab-assistente-investimentos-rpa-n8n/data.csv",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "b2c3d4e5-0002-4000-8000-000000000002",
+      "name": "Ler data.csv",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Clientes do webhook (aceita lista direta ou { clientes: [...] })\nconst body = $('Webhook').first().json.body;\nconst clientes = Array.isArray(body) ? body : (body.clientes || [body]);\n\n// Parse do CSV de opcoes de investimento\nconst csv = $input.first().json.data;\nconst linhas = csv.trim().split(/\\r?\\n/).filter(l => l.trim());\nconst sep = linhas[0].includes(';') ? ';' : ',';\nconst cab = linhas[0].split(sep).map(h => h.trim().toLowerCase());\nconst opcoes = linhas.slice(1).map(l => {\n  const c = l.split(sep);\n  const o = {};\n  cab.forEach((h, i) => o[h] = (c[i] || '').trim());\n  return o;\n});\n\nconst norm = s => (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().trim();\nconst chavePerfil = cab.find(h => norm(h).includes('perfil')) || cab[0];\n\n// Um item por cliente, com as opcoes do perfil dele em texto\nreturn clientes.map(cli => {\n  const perfil = norm(cli.perfil);\n  const sugestoes = opcoes\n    .filter(o => norm(o[chavePerfil]) === perfil)\n    .map(o => '- ' + Object.entries(o).filter(([k]) => k !== chavePerfil).map(([k, v]) => k + ': ' + v).join(' | '))\n    .join('\\n') || '- Sem opcoes cadastradas para este perfil.';\n  return { json: { nome: cli.nome, email: cli.email, saldo: cli.saldo, perfil: cli.perfil, sugestoes } };\n});"
+      },
+      "id": "b2c3d4e5-0003-4000-8000-000000000003",
+      "name": "Preparar dados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Cliente: {{ $json.nome }}\nSaldo disponivel: {{ $json.saldo }}\nPerfil de investidor: {{ $json.perfil }}\n\nOpcoes de investimento disponiveis para este perfil:\n{{ $json.sugestoes }}\n\nEscreva a mensagem de recomendacao para este cliente.",
+        "options": {
+          "systemMessage": "Voce e um assessor de investimentos simpatico e profissional de um banco digital. Escreva em portugues do Brasil uma mensagem curta (maximo 120 palavras), personalizada e humanizada, chamando o cliente pelo primeiro nome. Considere o saldo e o perfil do cliente. Recomende apenas as opcoes fornecidas, explicando em linguagem simples por que combinam com ele. Nao invente produtos, taxas ou rentabilidades que nao estejam na lista. Nao prometa ganhos garantidos e finalize convidando o cliente a falar com seu assessor."
+        }
+      },
+      "id": "b2c3d4e5-0004-4000-8000-000000000004",
+      "name": "Agente de Recomendacao",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.0-flash",
+        "options": {
+          "temperature": 0.7
+        }
+      },
+      "id": "b2c3d4e5-0005-4000-8000-000000000005",
+      "name": "Google Gemini Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [680, 220]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1000001-0000-4000-8000-000000000001",
+              "name": "nome",
+              "value": "={{ $('Preparar dados').item.json.nome }}",
+              "type": "string"
+            },
+            {
+              "id": "f1000001-0000-4000-8000-000000000002",
+              "name": "email",
+              "value": "={{ $('Preparar dados').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "f1000001-0000-4000-8000-000000000003",
+              "name": "perfil",
+              "value": "={{ $('Preparar dados').item.json.perfil }}",
+              "type": "string"
+            },
+            {
+              "id": "f1000001-0000-4000-8000-000000000004",
+              "name": "mensagem",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-0006-4000-8000-000000000006",
+      "name": "Montar resposta",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1000, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Ler data.csv", "type": "main", "index": 0 }]]
+    },
+    "Ler data.csv": {
+      "main": [[{ "node": "Preparar dados", "type": "main", "index": 0 }]]
+    },
+    "Preparar dados": {
+      "main": [[{ "node": "Agente de Recomendacao", "type": "main", "index": 0 }]]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [[{ "node": "Agente de Recomendacao", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Agente de Recomendacao": {
+      "main": [[{ "node": "Montar resposta", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

@@ -150,6 +150,19 @@ Conecte o Agente de IA do N8N a um modelo como Gemini ou GPT para:
     └── 📄 data.csv                 # ✅ Opções de investimento (já implementado)
 ```
 
+## Minha Implementação
+
+- **Workflow MVP (mensagens estáticas):** [`n8n/workflow.json`](n8n/workflow.json). Webhook (POST `/clientes`) → leitura do `data.csv` → nó Code que cruza perfil x investimentos e monta a mensagem a partir de templates por perfil.
+- **Workflow com IA (desafio):** [`n8n/workflow-ia.json`](n8n/workflow-ia.json). Mesmo fluxo, mas com AI Agent + Google Gemini gerando mensagens personalizadas.
+- **RPA:** [`src/extrair_clientes.ipynb`](src/extrair_clientes.ipynb) extrai os clientes da página e envia `{"clientes": [...]}` ao Webhook.
+
+### Como executar
+
+1. No N8N, importe `n8n/workflow.json` (*Workflows → Import from File*).
+2. Copie a URL do nó Webhook (Test URL ou Production URL).
+3. No notebook, substitua `N8N_WEBHOOK` por essa URL e execute no Google Colab.
+4. As mensagens por cliente aparecem na saída do notebook e na execução do N8N.
+
 ## Prompts Úteis para Copilotos de IA
 
 | Tarefa | Sugestão de Prompt |

@@ -1,0 +1,57 @@
+{
+  "name": "Assistente de Investimentos - RPA + N8N",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "clientes",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "clientes-investimentos"
+    },
+    {
+      "parameters": {
+        "url": "https://digitalinnovationone.github.io/dio-lab-assistente-investimentos-rpa-n8n/data.csv",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Ler data.csv",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1) Clientes recebidos do webhook (aceita lista direta ou { clientes: [...] })\nconst body = $('Webhook').first().json.body;\nconst clientes = Array.isArray(body) ? body : (body.clientes || [body]);\n\n// 2) Parse do CSV de opcoes de investimento\nconst csv = $input.first().json.data;\nconst linhas = csv.trim().split(/\\r?\\n/).filter(l => l.trim());\nconst sep = linhas[0].includes(';') ? ';' : ',';\nconst cab = linhas[0].split(sep).map(h => h.trim().toLowerCase());\nconst opcoes = linhas.slice(1).map(l => {\n  const c = l.split(sep);\n  const o = {};\n  cab.forEach((h, i) => o[h] = (c[i] || '').trim());\n  return o;\n});\n\nconst norm = s => (s || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().trim();\nconst chavePerfil = cab.find(h => norm(h).includes('perfil')) || cab[0];\n\n// 3) Templates estaticos por perfil (MVP)\nconst templates = {\n  conservador: 'Seu perfil e Conservador, entao o foco e seguranca e renda fixa, preservando o seu patrimonio com previsibilidade.',\n  moderado: 'Seu perfil e Moderado, entao sugerimos um mix equilibrado entre renda fixa e renda variavel, buscando crescimento com risco controlado.',\n  arrojado: 'Seu perfil e Arrojado, entao a enfase esta em acoes e ativos de maior potencial de retorno, aceitando mais volatilidade.'\n};\n\n// 4) Cruza perfil x opcoes e gera a mensagem\nreturn clientes.map(cli => {\n  const perfil = norm(cli.perfil);\n  const sugestoes = opcoes\n    .filter(o => norm(o[chavePerfil]) === perfil)\n    .map(o => '- ' + Object.entries(o).filter(([k]) => k !== chavePerfil).map(([k, v]) => k + ': ' + v).join(' | '));\n  const intro = templates[perfil] || 'Preparamos algumas opcoes de investimento para voce.';\n  const mensagem = 'Ola, ' + cli.nome + '!\\n\\n' + intro + '\\n\\nCom o saldo de ' + cli.saldo + ', estas sao as opcoes indicadas:\\n' + (sugestoes.join('\\n') || '- Sem opcoes cadastradas para este perfil.') + '\\n\\nFale com seu assessor para saber mais.';\n  return { json: { nome: cli.nome, email: cli.email, saldo: cli.saldo, perfil: cli.perfil, mensagem } };\n});"
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Cruzar perfil e gerar mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 0]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Ler data.csv", "type": "main", "index": 0 }]]
+    },
+    "Ler data.csv": {
+      "main": [[{ "node": "Cruzar perfil e gerar mensagem", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}
